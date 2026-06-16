@@ -1,1 +1,555 @@
-https://github.com/yoderstoragesheds-a11y/New-Finance-Tracker
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Yoder Storage Sheds — Weekly Tracker</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Syne:wght@700;800&display=swap');
+  :root {
+    --ink:#1C1C1A; --ink-2:#5A5A56; --ink-3:#9A9A94;
+    --canvas:#F2F0EA; --surface:#FFFFFF; --border:rgba(0,0,0,0.09);
+    --green:#1A9E6E; --green-bg:#E4F5EE; --green-txt:#0B4A30;
+    --red:#D94F3A; --red-bg:#FAEAE7; --red-txt:#6B1E12;
+    --amber:#D4860A; --amber-bg:#FDF3E0; --amber-txt:#6B3E00;
+    --blue:#2E7DD4; --blue-bg:#E5F0FB; --blue-txt:#0C3D72;
+    --radius:10px; --radius-lg:16px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Inter',-apple-system,sans-serif;background:var(--canvas);color:var(--ink);min-height:100vh;font-size:14px}
+  .hdr{background:var(--ink);color:white;padding:0 2rem;display:flex;align-items:center;height:56px;gap:16px;position:sticky;top:0;z-index:100}
+  .hdr-logo{font-family:'Syne',sans-serif;font-size:17px;font-weight:800;color:white;flex-shrink:0}
+  .hdr-logo em{color:#4ECFA0;font-style:normal}
+  .hdr-center{flex:1;text-align:center;font-size:12px;color:rgba(255,255,255,.4)}
+  .hdr-right{display:flex;align-items:center;gap:10px}
+  .hdr-time{font-size:11px;color:rgba(255,255,255,.4);white-space:nowrap}
+  .btn-refresh{display:flex;align-items:center;gap:5px;padding:6px 13px;font-size:12px;font-weight:500;border:1px solid rgba(255,255,255,.2);border-radius:6px;background:rgba(255,255,255,.08);color:white;cursor:pointer;font-family:inherit}
+  .btn-refresh:hover{background:rgba(255,255,255,.15)}
+  .btn-refresh svg{width:13px;height:13px}
+  .nav{background:var(--surface);border-bottom:1px solid var(--border);padding:0 2rem;display:flex}
+  .nav-tab{padding:14px 22px;font-size:13px;font-weight:500;cursor:pointer;border:none;background:none;color:var(--ink-3);border-bottom:2px solid transparent;margin-bottom:-1px;font-family:inherit;transition:color .15s,border-color .15s}
+  .nav-tab:hover{color:var(--ink)}
+  .nav-tab.active{color:var(--ink);border-bottom-color:var(--green)}
+  .page{display:none}.page.active{display:block}
+  .container{max-width:1080px;margin:0 auto;padding:2rem}
+  .kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:1.5rem}
+  .kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.1rem 1.25rem;position:relative;overflow:hidden}
+  .kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
+  .kpi.k-green::before{background:var(--green)}.kpi.k-red::before{background:var(--red)}
+  .kpi.k-amber::before{background:var(--amber)}.kpi.k-blue::before{background:var(--blue)}
+  .kpi-label{font-size:11px;font-weight:500;color:var(--ink-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px}
+  .kpi-value{font-family:'Syne',sans-serif;font-size:24px;font-weight:700}
+  .kpi.k-green .kpi-value{color:var(--green)}.kpi.k-red .kpi-value{color:var(--red)}
+  .kpi.k-amber .kpi-value{color:var(--amber)}.kpi.k-blue .kpi-value{color:var(--blue)}
+  .kpi-sub{font-size:11px;color:var(--ink-3);margin-top:4px}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem 1.5rem;margin-bottom:1rem}
+  .card-title{font-size:11px;font-weight:600;color:var(--ink-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:1.1rem}
+  .card-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem}
+  .chart-wrap{position:relative;height:260px;width:100%}
+  .legend{display:flex;gap:16px;margin-bottom:10px;flex-wrap:wrap}
+  .legend-item{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-2)}
+  .legend-dot{width:10px;height:10px;border-radius:2px;flex-shrink:0}
+  .tbl{width:100%;border-collapse:collapse;font-size:13px}
+  .tbl th{text-align:left;font-size:11px;font-weight:500;color:var(--ink-3);text-transform:uppercase;letter-spacing:.04em;padding:7px 10px;border-bottom:1px solid var(--border)}
+  .tbl td{padding:10px 10px;border-bottom:1px solid var(--border);color:var(--ink)}
+  .tbl tr:last-child td{border-bottom:none}
+  .tbl tr:hover td{background:var(--canvas)}
+  .tbl .sec-head td{font-size:10px;font-weight:600;color:var(--ink-3);text-transform:uppercase;letter-spacing:.07em;padding:12px 10px 5px;background:none!important}
+  .tbl .total-row td{font-weight:600;border-top:1px solid var(--border)}
+  .badge{display:inline-flex;align-items:center;font-size:11px;font-weight:500;padding:3px 9px;border-radius:100px}
+  .b-green{background:var(--green-bg);color:var(--green-txt)}
+  .b-red{background:var(--red-bg);color:var(--red-txt)}
+  .b-amber{background:var(--amber-bg);color:var(--amber-txt)}
+  .b-gray{background:var(--canvas);color:var(--ink-3);border:1px solid var(--border)}
+  .week-badge{display:inline-flex;align-items:center;gap:6px;background:var(--canvas);border:1px solid var(--border);border-radius:100px;padding:4px 12px 4px 8px;font-size:12px;color:var(--ink-2);margin-bottom:1.25rem}
+  .week-dot{width:7px;height:7px;border-radius:50%;background:var(--green)}
+  .net-bar{display:flex;align-items:center;justify-content:space-between;padding:1rem 1.25rem;background:var(--ink);border-radius:var(--radius-lg);margin-bottom:1rem;color:white}
+  .net-bar-label{font-size:12px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.06em}
+  .net-bar-value{font-family:'Syne',sans-serif;font-size:26px;font-weight:800}
+  .net-bar-value.pos{color:#4ECFA0}.net-bar-value.neg{color:#F47C6A}
+  .state-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;gap:14px;text-align:center;padding:2rem}
+  .spinner{width:34px;height:34px;border:3px solid var(--border);border-top-color:var(--green);border-radius:50%;animation:spin .7s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .state-title{font-family:'Syne',sans-serif;font-size:17px;font-weight:700}
+  .state-msg{font-size:13px;color:var(--ink-3);max-width:380px;line-height:1.6}
+  .btn-retry{padding:9px 20px;font-size:13px;font-weight:500;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--ink);cursor:pointer;font-family:inherit}
+  .section-divider{display:flex;align-items:center;gap:12px;margin:1.5rem 0 1rem;font-size:11px;font-weight:600;color:var(--ink-3);text-transform:uppercase;letter-spacing:.07em}
+  .section-divider::after{content:'';flex:1;height:1px;background:var(--border)}
+  @media(max-width:600px){.container{padding:1rem}.hdr{padding:0 1rem}.nav{padding:0 1rem}.card-grid{grid-template-columns:1fr}.kpi-row{grid-template-columns:1fr 1fr}.hdr-center{display:none}}
+</style>
+</head>
+<body>
+<header class="hdr">
+  <div class="hdr-logo">Yoder <em>Storage Sheds</em></div>
+  <div class="hdr-center" id="hdr-next"></div>
+  <div class="hdr-right">
+    <div class="hdr-time" id="hdr-updated"></div>
+    <button class="btn-refresh" onclick="loadAll()" id="btn-refresh">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+      Refresh
+    </button>
+  </div>
+</header>
+<nav class="nav">
+  <button class="nav-tab active" onclick="showPage('overview',this)">This Week</button>
+  <button class="nav-tab" onclick="showPage('two-week',this)">Past 2 Weeks</button>
+  <button class="nav-tab" onclick="showPage('three-week',this)">Past 3 Weeks</button>
+</nav>
+
+<div id="pg-loading" class="state-screen">
+  <div class="spinner"></div>
+  <div class="state-title">Loading your data</div>
+  <div class="state-msg">Pulling from your Google Sheets...</div>
+</div>
+<div id="pg-error" class="state-screen" style="display:none">
+  <div class="state-title" style="color:var(--red)">Could not load data</div>
+  <div class="state-msg" id="err-msg"></div>
+  <button class="btn-retry" onclick="loadAll()">Try again</button>
+</div>
+
+<div id="pg-main" style="display:none">
+  <div id="page-overview" class="page active">
+    <div class="container">
+      <div class="week-badge"><span class="week-dot"></span><span id="ov-week-label">—</span></div>
+      <div id="ov-net"></div>
+      <div class="kpi-row" id="ov-kpis"></div>
+      <div class="card-grid">
+        <div class="card"><div class="card-title">Income — collected vs pending</div><div id="ov-inc-table"></div></div>
+        <div class="card"><div class="card-title">Expenses — paid vs outstanding</div><div id="ov-exp-table"></div></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Income vs expenses</div>
+        <div class="legend">
+          <div class="legend-item"><span class="legend-dot" style="background:var(--green)"></span>Income</div>
+          <div class="legend-item"><span class="legend-dot" style="background:var(--red)"></span>Expenses</div>
+        </div>
+        <div class="chart-wrap"><canvas id="ov-chart"></canvas></div>
+      </div>
+    </div>
+  </div>
+  <div id="page-two-week" class="page">
+    <div class="container">
+      <div id="tw-net"></div>
+      <div class="kpi-row" id="tw-kpis"></div>
+      <div class="card">
+        <div class="card-title">2-week comparison</div>
+        <div class="legend">
+          <div class="legend-item"><span class="legend-dot" style="background:var(--green)"></span>Income</div>
+          <div class="legend-item"><span class="legend-dot" style="background:var(--red)"></span>Expenses</div>
+        </div>
+        <div class="chart-wrap"><canvas id="tw-chart"></canvas></div>
+      </div>
+      <div id="tw-weeks"></div>
+    </div>
+  </div>
+  <div id="page-three-week" class="page">
+    <div class="container">
+      <div id="th-net"></div>
+      <div class="kpi-row" id="th-kpis"></div>
+      <div class="card">
+        <div class="card-title">3-week comparison</div>
+        <div class="legend">
+          <div class="legend-item"><span class="legend-dot" style="background:var(--green)"></span>Income</div>
+          <div class="legend-item"><span class="legend-dot" style="background:var(--red)"></span>Expenses</div>
+        </div>
+        <div class="chart-wrap"><canvas id="th-chart"></canvas></div>
+      </div>
+      <div id="th-weeks"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const INCOME_ID  = '1C8HAVeAgMgaCUcRr0Y_FNBlxFPK2X12MrHXZ3lGqPbQ';
+const EXPENSE_ID = '1RXDNLq48L4slhfxPI3TcShG5eEzeNSG3eWLoyqQWnUs';
+const TABS = ['Sheet1','Sheet2','Sheet3'];
+let INCOME_DATA=[], EXPENSE_DATA=[], charts={};
+
+const fmt = n => (isNaN(n)||n==null) ? '—' : '$'+Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+const parseAmt = v => { if(!v) return 0; const n=parseFloat(String(v).replace(/[$,\s]/g,'')); return isNaN(n)?0:n; };
+const isTRUE = v => String(v||'').trim().toUpperCase()==='TRUE';
+
+function csvUrl(id,tab){ return `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tab)}`; }
+async function fetchCSV(id,tab){
+  const res = await fetch(csvUrl(id,tab));
+  if(!res.ok) throw new Error(`Failed to load ${tab} (HTTP ${res.status})`);
+  const txt = await res.text();
+  if(!txt||txt.trim().length<10) throw new Error(`Empty response for ${tab}`);
+  const result = Papa.parse(txt,{skipEmptyLines:false});
+  if(!result.data||!result.data.length) throw new Error(`Could not parse ${tab}`);
+  return result.data;
+}
+
+function parseWeekLabel(rows){
+  const month=(rows[2]&&rows[2][0])||'';
+  const year =(rows[2]&&rows[2][1])||'';
+  const range=(rows[3]&&rows[3][0])||'';
+  return `${month} ${range} ${year}`.trim();
+}
+
+// ── INCOME PARSER ──────────────────────────────────────────────────────────
+// Sheet structure:
+// Row 0: "Weekly Income Tracking"
+// Row 1: blank
+// Row 2: "June", "2026"
+// Row 3: "8-12"
+// Row 4: category headers (Incoming Payments, Deliveries, Onsites, RTO's, Checks on Hand)
+// Row 5: column headers (Customer, Outstanding, Received, Outstanding, Received, ...)
+// Row 6+: data rows
+// Last rows: totals, Collected/Total/Remaining
+function parseIncome(rows){
+  const label = parseWeekLabel(rows);
+  const entries = [];
+
+  // Find "Customer" header row
+  let dataStart = 6;
+  for(let i=0;i<Math.min(rows.length,12);i++){
+    if((rows[i][0]||'').toLowerCase().trim()==='customer'){ dataStart=i+1; break; }
+  }
+
+  // Column mapping: [amountCol, receivedCol, typeName]
+  const typeDefs = [
+    [1, 2,  'Incoming Payment'],
+    [3, 4,  'Delivery'],
+    [5, 6,  'Onsite'],
+    [7, 8,  'RTO'],
+    [9, 10, 'Check on Hand'],
+  ];
+
+  for(let i=dataStart;i<rows.length;i++){
+    const r=rows[i];
+    const customer=(r[0]||'').trim();
+    // Stop at empty customer or totals row (starts with $)
+    if(!customer||customer.startsWith('$')) continue;
+    typeDefs.forEach(([aC,rC,type])=>{
+      const amount=parseAmt(r[aC]);
+      const received=isTRUE(r[rC]);
+      if(amount>0) entries.push({customer,type,amount,received});
+    });
+  }
+
+  // Scan last 8 rows for summary values
+  let collected=0,total=0,remaining=0;
+  rows.slice(-8).forEach(r=>{
+    for(let c=0;c<r.length-1;c++){
+      const cell=(r[c]||'').toLowerCase().trim();
+      if(cell==='collected') collected=parseAmt(r[c+1]);
+      if(cell==='total')     total    =parseAmt(r[c+1]);
+      if(cell==='remaining') remaining=parseAmt(r[c+1]);
+    }
+  });
+
+  const pending=entries.filter(e=>!e.received).reduce((s,e)=>s+e.amount,0);
+  return {label,entries,collected,total,remaining,pending};
+}
+
+// ── EXPENSE PARSER ─────────────────────────────────────────────────────────
+// Sheet1 structure (no Expenses header col):
+// Row 0: "Weekly Expense Tracking"
+// Row 1: blank
+// Row 2: "June","2026"
+// Row 3: "15-19"
+// Row 4: "Checks Printed","Wire Sent","Amount","Payments Completed"
+// Row 5+: vendor, checkPrinted, wireSent, amount, completed
+//
+// Sheet2/3 structure (has Expenses header col):
+// Row 4: "Expenses","Checks Printed","Wire Sent","Amount","Payments Completed"
+// Row 5+: vendor, checkPrinted, wireSent, amount, completed
+function parseExpense(rows){
+  const label=parseWeekLabel(rows);
+  const entries=[];
+
+  // Detect column layout by inspecting row 4
+  // If row4[0] looks like a header word (not a dollar amount), find vendor col
+  let vendorCol=0, checkCol=1, wireCol=2, amtCol=3, doneCol=4;
+  const row4=(rows[4]||[]);
+  // If first cell of row4 is "Expenses" or similar label, vendor is col 0 of data rows
+  // Both layouts have vendor in col 0, amount in col 3 for Sheet2/3
+  // Sheet1 has: col0=vendor, col1=checkPrinted, col2=wireSent, col3=amount, col4=completed
+  // So same mapping works for both — just need right dataStart
+
+  let dataStart=5;
+  for(let i=0;i<Math.min(rows.length,10);i++){
+    const c0=(rows[i][0]||'').toLowerCase().trim();
+    if(c0==='expenses'||c0==='checks printed'||c0==='vendor'||c0==='payee'){
+      dataStart=i+1; break;
+    }
+    // Also check if row has "Checks Printed" in col 1
+    if((rows[i][1]||'').toLowerCase().includes('checks')){
+      dataStart=i+1; break;
+    }
+  }
+
+  const catMap={
+    'payroll':'Payroll','sales':'Sales','contractors':'Contractors',
+    'ufp':'Materials','valley':'Materials','nw parkway':'Bills',
+    'penrose':'Bills','jims tire':'Bills','dirks':'Bills',
+    'classic garage':'Bills','towlift':'Bills','capitol one':'Bills',
+    'chase':'Bills','southern co':'Vendors','central co':'Vendors',
+    'merle':'Vendors','tanner':'Vendors',
+  };
+
+  for(let i=dataStart;i<rows.length;i++){
+    const r=rows[i];
+    const vendor=(r[vendorCol]||'').trim();
+    if(!vendor||vendor.startsWith('$')) continue;
+    const amount=parseAmt(r[amtCol]);
+    if(!amount) continue;
+    const checkPrinted=isTRUE(r[checkCol]);
+    const wireSent    =isTRUE(r[wireCol]);
+    const completed   =isTRUE(r[doneCol]);
+    let category='Other';
+    const key=vendor.toLowerCase();
+    for(const k in catMap){ if(key.includes(k)){ category=catMap[k]; break; } }
+    const method=wireSent?'Wire':checkPrinted?'Check':'—';
+    entries.push({vendor,category,amount,method,completed});
+  }
+
+  let paid=0,inTransit=0,total=0,remaining=0;
+  rows.slice(-6).forEach(r=>{
+    for(let c=0;c<r.length-1;c++){
+      const cell=(r[c]||'').toLowerCase().trim();
+      if(cell==='paid')      paid     =parseAmt(r[c+1]);
+      if(cell.includes('transit')) inTransit=parseAmt(r[c+1]);
+      if(cell==='total')     total    =parseAmt(r[c+1]);
+      if(cell==='remaining') remaining=parseAmt(r[c+1]);
+    }
+    // Also check cols 3-4 for Total/Remaining
+    const c3=(r[3]||'').toLowerCase().trim();
+    if(c3==='total')     total    =parseAmt(r[4]);
+    if(c3==='remaining') remaining=parseAmt(r[4]);
+  });
+
+  const outstanding=entries.filter(e=>!e.completed).reduce((s,e)=>s+e.amount,0);
+  return {label,entries,paid,inTransit,total,remaining,outstanding};
+}
+
+// ── SORT WEEKS OLDEST→NEWEST ───────────────────────────────────────────────
+function sortWeeks(arr){
+  const M={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+  return arr.slice().sort((a,b)=>{
+    const score=lbl=>{
+      const p=lbl.toLowerCase().split(' ');
+      const m=M[p[0]?.slice(0,3)]||0;
+      const d=parseInt((p[1]||'').split('-')[0])||0;
+      const y=parseInt(p[2])||0;
+      return y*10000+m*100+d;
+    };
+    return score(a.label)-score(b.label);
+  });
+}
+
+// ── CHART ──────────────────────────────────────────────────────────────────
+function buildChart(id,labels,incData,expData){
+  if(charts[id]) charts[id].destroy();
+  charts[id]=new Chart(document.getElementById(id),{
+    type:'bar',
+    data:{labels,datasets:[
+      {label:'Income',  data:incData,backgroundColor:'#1A9E6E',borderRadius:5},
+      {label:'Expenses',data:expData,backgroundColor:'#D94F3A',borderRadius:5},
+    ]},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+fmt(c.raw)}}},
+      scales:{
+        x:{ticks:{color:'#9A9A94',font:{size:11}},grid:{color:'rgba(0,0,0,0.04)'}},
+        y:{ticks:{color:'#9A9A94',callback:v=>'$'+Math.round(v).toLocaleString(),font:{size:11}},grid:{color:'rgba(0,0,0,0.04)'}}
+      }
+    }
+  });
+}
+
+// ── UI HELPERS ─────────────────────────────────────────────────────────────
+function netBar(net,id){
+  const cls=net>=0?'pos':'neg', lbl=net>=0?'Net Profit':'Net Loss';
+  document.getElementById(id).innerHTML=`<div class="net-bar"><div class="net-bar-label">${lbl}</div><div class="net-bar-value ${cls}">${fmt(Math.abs(net))}</div></div>`;
+}
+
+function kpiRow(id,items){
+  document.getElementById(id).innerHTML=items.map(k=>`
+    <div class="kpi k-${k.color}">
+      <div class="kpi-label">${k.label}</div>
+      <div class="kpi-value">${fmt(k.value)}</div>
+      ${k.sub?`<div class="kpi-sub">${k.sub}</div>`:''}
+    </div>`).join('');
+}
+
+function incomeTable(w){
+  const byType={};
+  (w.entries||[]).forEach(e=>{ if(!byType[e.type]) byType[e.type]=[]; byType[e.type].push(e); });
+  let rows='';
+  Object.entries(byType).forEach(([type,list])=>{
+    rows+=`<tr class="sec-head"><td colspan="3">${type}</td></tr>`;
+    list.forEach(e=>{
+      rows+=`<tr>
+        <td style="width:48%">${e.customer}</td>
+        <td style="width:27%;text-align:right;font-weight:500;color:var(--green)">${fmt(e.amount)}</td>
+        <td style="width:25%;text-align:center"><span class="badge ${e.received?'b-green':'b-amber'}">${e.received?'In bank':'Pending'}</span></td>
+      </tr>`;
+    });
+  });
+  if(!rows) rows=`<tr><td colspan="3" style="color:var(--ink-3);text-align:center;padding:1.5rem">No entries</td></tr>`;
+  return `<table class="tbl">
+    <thead><tr><th>Customer</th><th style="text-align:right">Amount</th><th style="text-align:center">Status</th></tr></thead>
+    <tbody>${rows}
+      <tr class="total-row">
+        <td>Total</td>
+        <td style="text-align:right;color:var(--green)">${fmt(w.total)}</td>
+        <td style="text-align:center"><span class="badge b-green">Collected ${fmt(w.collected)}</span></td>
+      </tr>
+    </tbody></table>`;
+}
+
+function expenseTable(w){
+  const byCat={};
+  (w.entries||[]).forEach(e=>{ if(!byCat[e.category]) byCat[e.category]=[]; byCat[e.category].push(e); });
+  let rows='';
+  Object.entries(byCat).forEach(([cat,list])=>{
+    rows+=`<tr class="sec-head"><td colspan="4">${cat}</td></tr>`;
+    list.forEach(e=>{
+      rows+=`<tr>
+        <td style="width:38%">${e.vendor}</td>
+        <td style="width:14%;text-align:center"><span class="badge b-gray">${e.method}</span></td>
+        <td style="width:25%;text-align:right;font-weight:500;color:var(--red)">${fmt(e.amount)}</td>
+        <td style="width:23%;text-align:center"><span class="badge ${e.completed?'b-green':'b-red'}">${e.completed?'Paid':'Outstanding'}</span></td>
+      </tr>`;
+    });
+  });
+  if(!rows) rows=`<tr><td colspan="4" style="color:var(--ink-3);text-align:center;padding:1.5rem">No entries</td></tr>`;
+  return `<table class="tbl">
+    <thead><tr><th>Vendor</th><th style="text-align:center">Method</th><th style="text-align:right">Amount</th><th style="text-align:center">Status</th></tr></thead>
+    <tbody>${rows}
+      <tr class="total-row">
+        <td colspan="2">Total</td>
+        <td style="text-align:right;color:var(--red)">${fmt(w.total)}</td>
+        <td style="text-align:center"><span class="badge b-red">Outstanding ${fmt(w.remaining)}</span></td>
+      </tr>
+    </tbody></table>`;
+}
+
+function multiWeekBlock(containerId,incWeeks,expWeeks){
+  const expMap={};
+  expWeeks.forEach(w=>expMap[w.label]=w);
+  let html='';
+  incWeeks.forEach(iw=>{
+    const ew=expMap[iw.label]||{total:0,paid:0,remaining:0,outstanding:0,entries:[],label:iw.label};
+    const net=iw.total-ew.total;
+    html+=`
+      <div class="section-divider">${iw.label}</div>
+      <div class="kpi-row" style="margin-bottom:1rem">
+        <div class="kpi k-green"><div class="kpi-label">Income</div><div class="kpi-value">${fmt(iw.total)}</div><div class="kpi-sub">Collected ${fmt(iw.collected)}</div></div>
+        <div class="kpi k-amber"><div class="kpi-label">Pending Income</div><div class="kpi-value">${fmt(iw.pending)}</div><div class="kpi-sub">Not yet in bank</div></div>
+        <div class="kpi k-red"><div class="kpi-label">Expenses</div><div class="kpi-value">${fmt(ew.total)}</div><div class="kpi-sub">Paid ${fmt(ew.paid)}</div></div>
+        <div class="kpi k-${net>=0?'green':'red'}"><div class="kpi-label">Net</div><div class="kpi-value">${fmt(net)}</div></div>
+      </div>
+      <div class="card-grid">
+        <div class="card"><div class="card-title">Income detail</div>${incomeTable(iw)}</div>
+        <div class="card"><div class="card-title">Expense detail</div>${expenseTable(ew)}</div>
+      </div>`;
+  });
+  document.getElementById(containerId).innerHTML=html;
+}
+
+// ── RENDER ─────────────────────────────────────────────────────────────────
+function renderAll(){
+  const inc=INCOME_DATA, exp=EXPENSE_DATA;
+  const expMap={};
+  exp.forEach(w=>expMap[w.label]=w);
+  const getExp=(iw,fallbackIdx)=>expMap[iw.label]||exp[fallbackIdx]||{total:0,paid:0,remaining:0,outstanding:0,entries:[],label:iw.label,collected:0,pending:0};
+
+  // THIS WEEK — most recent (last in sorted array)
+  const curI=inc[inc.length-1];
+  const curE=getExp(curI,exp.length-1);
+  const curNet=curI.total-curE.total;
+  document.getElementById('ov-week-label').textContent=curI.label;
+  netBar(curNet,'ov-net');
+  kpiRow('ov-kpis',[
+    {label:'Total Income',    value:curI.total,     color:'green', sub:`Collected ${fmt(curI.collected)}`},
+    {label:'Pending Income',  value:curI.pending,   color:'amber', sub:'Not yet in bank'},
+    {label:'Total Expenses',  value:curE.total,     color:'red',   sub:`Paid ${fmt(curE.paid)}`},
+    {label:'Outstanding Exp', value:curE.remaining, color:'red',   sub:'Not yet paid'},
+  ]);
+  document.getElementById('ov-inc-table').innerHTML=incomeTable(curI);
+  document.getElementById('ov-exp-table').innerHTML=expenseTable(curE);
+  buildChart('ov-chart',[curI.label],[curI.total],[curE.total]);
+
+  // PAST 2 WEEKS
+  const tw2=inc.slice(-2);
+  const te2=tw2.map((w,i)=>getExp(w,exp.length-2+i));
+  const tw2Inc=tw2.reduce((s,w)=>s+w.total,0);
+  const tw2Exp=te2.reduce((s,w)=>s+w.total,0);
+  netBar(tw2Inc-tw2Exp,'tw-net');
+  kpiRow('tw-kpis',[
+    {label:'2-Week Income',   value:tw2Inc, color:'green', sub:`Collected ${fmt(tw2.reduce((s,w)=>s+w.collected,0))}`},
+    {label:'2-Week Expenses', value:tw2Exp, color:'red',   sub:`Outstanding ${fmt(te2.reduce((s,w)=>s+w.remaining,0))}`},
+  ]);
+  buildChart('tw-chart',tw2.map(w=>w.label),tw2.map(w=>w.total),te2.map(w=>w.total));
+  multiWeekBlock('tw-weeks',tw2,te2);
+
+  // PAST 3 WEEKS
+  const tw3=inc.slice(-3);
+  const te3=tw3.map((w,i)=>getExp(w,exp.length-3+i));
+  const tw3Inc=tw3.reduce((s,w)=>s+w.total,0);
+  const tw3Exp=te3.reduce((s,w)=>s+w.total,0);
+  netBar(tw3Inc-tw3Exp,'th-net');
+  kpiRow('th-kpis',[
+    {label:'3-Week Income',   value:tw3Inc, color:'green', sub:`Collected ${fmt(tw3.reduce((s,w)=>s+w.collected,0))}`},
+    {label:'3-Week Expenses', value:tw3Exp, color:'red',   sub:`Outstanding ${fmt(te3.reduce((s,w)=>s+w.remaining,0))}`},
+  ]);
+  buildChart('th-chart',tw3.map(w=>w.label),tw3.map(w=>w.total),te3.map(w=>w.total));
+  multiWeekBlock('th-weeks',tw3,te3);
+}
+
+// ── LOAD ───────────────────────────────────────────────────────────────────
+async function loadAll(){
+  document.getElementById('pg-loading').style.display='flex';
+  document.getElementById('pg-error').style.display='none';
+  document.getElementById('pg-main').style.display='none';
+  document.getElementById('btn-refresh').disabled=true;
+  try{
+    const [i1,i2,i3,e1,e2,e3]=await Promise.all([
+      fetchCSV(INCOME_ID,'Sheet1'),fetchCSV(INCOME_ID,'Sheet2'),fetchCSV(INCOME_ID,'Sheet3'),
+      fetchCSV(EXPENSE_ID,'Sheet1'),fetchCSV(EXPENSE_ID,'Sheet2'),fetchCSV(EXPENSE_ID,'Sheet3'),
+    ]);
+    INCOME_DATA =sortWeeks([parseIncome(i1), parseIncome(i2), parseIncome(i3)]);
+    EXPENSE_DATA=sortWeeks([parseExpense(e1),parseExpense(e2),parseExpense(e3)]);
+    renderAll();
+    const now=new Date().toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZoneName:'short',timeZone:'America/Denver'});
+    document.getElementById('hdr-updated').textContent=`Updated ${now}`;
+    document.getElementById('hdr-next').textContent=nextRefresh();
+    document.getElementById('pg-loading').style.display='none';
+    document.getElementById('pg-main').style.display='block';
+  }catch(err){
+    document.getElementById('pg-loading').style.display='none';
+    document.getElementById('pg-error').style.display='flex';
+    document.getElementById('err-msg').textContent=err.message;
+  }finally{
+    document.getElementById('btn-refresh').disabled=false;
+  }
+}
+
+function nextRefresh(){
+  const mst=new Date(new Date().toLocaleString('en-US',{timeZone:'America/Denver'}));
+  const day=mst.getDay();
+  const days=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const upcoming=[2,5].map(t=>{
+    let diff=t-day;
+    if(diff<0||(diff===0&&mst.getHours()>=9)) diff+=7;
+    const d=new Date(mst); d.setDate(mst.getDate()+diff); d.setHours(9,0,0,0); return d;
+  }).sort((a,b)=>a-b);
+  return `Next refresh: ${days[upcoming[0].getDay()]} 9:00 AM MST`;
+}
+
+function showPage(id,el){
+  document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('page-'+id).classList.add('active');
+}
+
+loadAll();
+</script>
+</body>
+</html>
